@@ -9,6 +9,12 @@
     - '{{ roundcube_base_packages }}'
   when: ansible_pkg_mgr == 'apt'
 
+- name: Ensure Roundcube installation directory exists
+  file:
+    path: "{{roundcube_install_dir}}"
+    state: directory
+    mode: 0755
+
 - name: Generate roundcube apache configuration
   template:
     src: 'apache/apache2-roundcube.sample.conf.j2'
@@ -27,7 +33,7 @@
 - name: Unpack Roundcube
   unarchive:
     src: https://github.com/roundcube/roundcubemail/releases/download/1.3.6/roundcubemail-1.3.6-complete.tar.gz
-    dest: /var/www/roundcube
+    dest: "{{roundcube_install_dir}}"
     extra_opts: [--strip-components=1]
     remote_src: yes
 
@@ -35,6 +41,8 @@
   mysql_db:
     name: '{{roundcube_mysql_database_name}}'
     state: present
+    login_user: "{{charles_ansible_username}}"
+    login_password: "{{charles_ansible_password}}"
 
 - name: Create database user
   mysql_user:
@@ -42,16 +50,24 @@
     password: '{{roundcube_mysql_password}}'
     priv: '{{roundcube_mysql_database_name}}.*:ALL'
     state: present
+    login_user: "{{charles_ansible_username}}"
+    login_password: "{{charles_ansible_password}}"
+
+- name: Install Roundcube schema
+  mysql_db:
+    state: import
+    name: "{{roundcube_mysql_database_name}}"
+    target: "{{roundcube_install_dir}}/SQL/mysql.initial.sql"
+    login_user: "{{charles_ansible_username}}"
+    login_password: "{{charles_ansible_password}}"
 
 - name: Generate roundcube application configuration
   template:
     src: 'roundcube/config.inc.php.j2'
-    dest: '/var/www/roundcube/config/config.inc.php'
+    dest: '{{roundcube_install_dir}}/config/config.inc.php'
     owner: 'root'
     group: 'root'
     mode: '0644'
-
-
     
 - name: Enable roundcube site
   command: a2ensite webmail-{{mail_hostname}}.conf
